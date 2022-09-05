@@ -4,9 +4,9 @@ import os
 import requests
 from requests.auth import HTTPBasicAuth
 
-auth = HTTPBasicAuth(username='qqq', password='qqq')
+auth = HTTPBasicAuth(username='www', password='www')
 
-file = 'BioShock - Trailer.mp4'
+file = 'Death Stranding Релизный трейлер PS4.mp4'
 
 size = os.path.getsize(file)
 
@@ -28,7 +28,7 @@ with open(file, 'rb') as f:
             },
             auth=auth
         )
-        print(res)
+        # print(res)
         offset = int(res.json().get('offset'))
         url = res.json().get('url')
     finalize = requests.post(
@@ -36,5 +36,5 @@ with open(file, 'rb') as f:
         data={'md5': hash_md5.hexdigest()},
         auth=auth
     )
-    print(finalize.status_code)
+    print(finalize)
     print(finalize.json())
