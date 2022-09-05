@@ -3,6 +3,7 @@ import os.path
 import hashlib
 import uuid
 
+from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
@@ -15,7 +16,7 @@ AUTH_USER_MODEL = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
 
 
 video_extension = ['mp4', 'M4V', 'm4v', 'avi', 'MP4', 'F4V', 'f4v', 'AVI', 'MOV', 'mov', 'MKV', 'mkv', 'WMV', 'wmv', '3gp', '3GP', 'MPG', 'mpg', 'webm', 'WebM', 'WEBM', '3G2', '3g2', '3GPP', '3gpp', 'FLV', 'flv', 'MPEG4', 'mpeg4', 'RM', 'rm', 'TS', 'ts']
-image_extension = ['jfif', 'jpg', 'jpeg', 'png', 'PNG', 'raw', 'psd', 'bmp', 'JFIF', 'JP2', 'JPG', 'RAW', 'PSD', 'BMP', 'jp2']
+image_extension = ['jfif', 'jpg', 'jpeg', 'png', 'PNG', 'raw', 'psd', 'bmp', 'JFIF', 'JP2', 'JPG', 'RAW', 'PSD', 'BMP', 'jp2', 'mjpeg', 'MJPEG']
 gif_extension = ['GIF', 'gif']
 
 
@@ -140,7 +141,10 @@ class AbstractChunkedUpload(models.Model):
 class ChunkedUpload(AbstractChunkedUpload):
     '''Concrete model if you are not implementing your own.'''
     type_media = models.CharField(max_length=8, choices=MediaChoices.choices, null=True, blank=True)
-    file_extension = models.CharField(max_length=8, null=True, blank=True)
+    codec_name = models.CharField(max_length=8, null=True, blank=True)
+    type_extension = models.CharField(max_length=8, null=True, blank=True)
+    height = models.CharField(max_length=8, null=True, blank=True)
+    width = models.CharField(max_length=8, null=True, blank=True)
     user = models.ForeignKey(AUTH_USER_MODEL,
                              related_name="%(class)s",
                              editable=False,
