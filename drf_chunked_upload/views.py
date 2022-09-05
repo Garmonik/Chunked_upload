@@ -8,8 +8,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 from drf_chunked_upload import settings as _settings
-from drf_chunked_upload.models import ChunkedUpload
-from drf_chunked_upload.serializers import ChunkedUploadSerializer
+from drf_chunked_upload.models import ChunkedUpload, image_extension, video_extension
+from drf_chunked_upload.serializers import ChunkedUploadSerializer, UploadFileSerializer
 from drf_chunked_upload.exceptions import ChunkedUploadError
 
 
@@ -22,10 +22,15 @@ class ChunkedUploadBaseView(GenericAPIView):
     model = ChunkedUpload
     user_field_name = 'user'  # the field name that point towards the AUTH_USER in ChunkedUpload class or its subclasses
     serializer_class = ChunkedUploadSerializer
+    serializer_class_new = UploadFileSerializer
 
     @property
     def response_serializer_class(self):
         return self.serializer_class
+
+    @property
+    def response_serializer_class_file(self):
+        return self.serializer_class_new
 
     def get_queryset(self):
         """
@@ -61,18 +66,12 @@ class ChunkedUploadBaseView(GenericAPIView):
             return Response(error.data, status=error.status_code)
 
     def post(self, request, pk=None, *args, **kwargs):
-        """
-        Handle POST requests.
-        """
         try:
             return self._post(request, pk=pk, *args, **kwargs)
         except ChunkedUploadError as error:
             return Response(error.data, status=error.status_code)
 
     def get(self, request, pk=None, *args, **kwargs):
-        """
-        Handle GET requests.
-        """
         try:
             return self._get(request, pk=pk, *args, **kwargs)
         except ChunkedUploadError as error:
@@ -81,30 +80,15 @@ class ChunkedUploadBaseView(GenericAPIView):
 
 class ChunkedUploadView(ListModelMixin, RetrieveModelMixin,
                         ChunkedUploadBaseView):
-    """
-    Uploads large files in multiple chunks. Also, has the ability to resume
-    if the upload is interrupted. PUT without upload ID to create an upload
-    and POST to complete the upload. POST with a complete file to upload a
-    whole file in one go. Method `on_completion` is a placeholder to
-    define what to do when upload is complete.
-    """
-
-    # I wouldn't recommend turning off the checksum check,
-    # unless it is signifcantly impacting performance.
-    # Proceed at your own risk.
     do_checksum_check = True
 
     field_name = 'file'
     content_range_pattern = re.compile(
         r'^bytes (?P<start>\d+)-(?P<end>\d+)/(?P<total>\d+)$'
     )
-    max_bytes = _settings.MAX_BYTES  # Max amount of data that can be uploaded
+    max_bytes = _settings.MAX_BYTES
 
     def on_completion(self, chunked_upload, request) -> Response:
-        """
-        Validation or operations to run when upload is complete.
-        Returns an HTTP response.
-        """
         return Response(
             self.response_serializer_class(
                 chunked_upload,
@@ -113,20 +97,20 @@ class ChunkedUploadView(ListModelMixin, RetrieveModelMixin,
             status=status.HTTP_200_OK,
         )
 
+    def on_completion_file(self, chunked_upload, request) -> Response:
+        return Response(
+            self.response_serializer_class_file(
+                chunked_upload,
+                context={'request': request}
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
     def get_max_bytes(self, request):
-        """
-        Used to limit the max amount of data that can be uploaded. `None` means
-        no limit.
-        You can override this to have a custom `max_bytes`, e.g. based on
-        logged user.
-        """
 
         return self.max_bytes
 
     def is_valid_chunked_upload(self, chunked_upload):
-        """
-        Check if chunked upload has already expired or is already complete.
-        """
         if chunked_upload.expired:
             raise ChunkedUploadError(status=status.HTTP_410_GONE,
                                      detail='Upload has expired')
@@ -211,8 +195,6 @@ class ChunkedUploadView(ListModelMixin, RetrieveModelMixin,
                 raise ChunkedUploadError(status=status.HTTP_400_BAD_REQUEST,
                                          detail=f'tut {chunked_upload.errors}')
 
-            # chunked_upload is currently a serializer;
-            # save returns model instance
             chunked_upload = chunked_upload.save(**kwargs)
 
         return chunked_upload
@@ -226,9 +208,6 @@ class ChunkedUploadView(ListModelMixin, RetrieveModelMixin,
         )
 
     def checksum_check(self, chunked_upload, checksum):
-        """
-        Verify if checksum sent by client matches generated checksum.
-        """
         if chunked_upload.checksum != checksum:
             raise ChunkedUploadError(status=status.HTTP_400_BAD_REQUEST,
                                      detail='checksum does not match')
@@ -260,7 +239,7 @@ class ChunkedUploadView(ListModelMixin, RetrieveModelMixin,
 
         chunked_upload.completed()
 
-        return self.on_completion(chunked_upload, request)
+        return self.on_completion_file(chunked_upload, request)
 
     def _get(self, request, pk=None, *args, **kwargs):
         if pk:
